@@ -40,8 +40,8 @@ commands := bot.NewCommandRegistry()
 commands.Register("start", commandStart)
 commands.Register("help", commandHelp)
 
-// Asignar el registro al bot
-bot.SetCommandRegistry(commands)
+// Crear el bot con el registro de comandos
+bot := bot.NewBot(token, bot.WithCommandRegistry(commands))
 ```
 
 ## Comandos con Argumentos
@@ -287,12 +287,13 @@ func main() {
     b := bot.NewBot(token)
     
     commands := bot.NewCommandRegistry()
+    commands := bot.NewCommandRegistry()
     commands.Register("start", commandStart)
     commands.Register("help", commandHelp)
     commands.Register("time", commandTime)
     commands.Register("echo", commandEcho)
     
-    b.SetCommandRegistry(commands)
+    b := bot.NewBot(token, bot.WithCommandRegistry(commands))
 
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()

@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
+
+	"github.com/totote05/go-toolkit/pkg/logger"
 )
 
 const (
@@ -23,17 +26,84 @@ type Bot struct {
 	offset          int
 	commandRegistry *CommandRegistry
 	apiBaseURL      string // Para testing, por defecto usa la constante apiURL
+	logger          *slog.Logger
 }
 
-func NewBot(token string) *Bot {
-	return &Bot{
+// BotOption es una función que configura opciones del Bot.
+type BotOption func(*Bot)
+
+// WithLogger configura el logger que utilizará el bot.
+// Permite que el consumidor reutilice su propia instancia de logger.
+//
+// Ejemplo:
+//
+//	appLogger := slog.New(customHandler)
+//	bot := bot.NewBot(token, bot.WithLogger(appLogger))
+func WithLogger(log *slog.Logger) BotOption {
+	return func(b *Bot) {
+		if log != nil {
+			b.logger = log
+		}
+	}
+}
+
+// WithCommandRegistry configura el registro de comandos del bot.
+//
+// Ejemplo:
+//
+//	commands := bot.NewCommandRegistry()
+//	commands.Register("start", commandStart)
+//	bot := bot.NewBot(token, bot.WithCommandRegistry(commands))
+func WithCommandRegistry(registry *CommandRegistry) BotOption {
+	return func(b *Bot) {
+		b.commandRegistry = registry
+	}
+}
+
+// defaultLogger crea un logger por defecto usando el handler de go-toolkit.
+func defaultLogger() *slog.Logger {
+	handler := logger.NewHandler(os.Stdout, &logger.HandlerOptions{
+		Level:      slog.LevelInfo,
+		StackTrace: 5,
+	})
+	return slog.New(handler)
+}
+
+// NewBot crea una nueva instancia del bot con el token proporcionado.
+// Acepta opciones funcionales para configurar el bot.
+//
+// Ejemplo de uso básico:
+//
+//	bot := bot.NewBot(token)
+//
+// Ejemplo con logger personalizado:
+//
+//	appLogger := slog.New(customHandler)
+//	bot := bot.NewBot(token, bot.WithLogger(appLogger))
+//
+// Ejemplo con logger y comandos:
+//
+//	bot := bot.NewBot(token,
+//	    bot.WithLogger(appLogger),
+//	    bot.WithCommandRegistry(commands),
+//	)
+func NewBot(token string, opts ...BotOption) *Bot {
+	b := &Bot{
 		token: token,
 		client: &http.Client{
 			Timeout: time.Second * 70, // un poco más que el timeout de long polling
 		},
 		offset:     0,
-		apiBaseURL: apiURL, // Usar la constante por defecto
+		apiBaseURL: apiURL,          // Usar la constante por defecto
+		logger:     defaultLogger(), // Logger por defecto
 	}
+
+	// Aplicar opciones
+	for _, opt := range opts {
+		opt(b)
+	}
+
+	return b
 }
 
 func (b *Bot) makeRequest(ctx context.Context, method string, payload any) (*Response, error) {
@@ -43,6 +113,10 @@ func (b *Bot) makeRequest(ctx context.Context, method string, payload any) (*Res
 	if payload != nil {
 		jsonData, err := json.Marshal(payload)
 		if err != nil {
+			b.logger.Error("Error marshaling payload",
+				slog.String("method", method),
+				slog.String("error", err.Error()),
+			)
 			return nil, fmt.Errorf("error marshaling payload: %w", err)
 		}
 		body = bytes.NewBuffer(jsonData)
@@ -50,28 +124,52 @@ func (b *Bot) makeRequest(ctx context.Context, method string, payload any) (*Res
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, body)
 	if err != nil {
+		b.logger.Error("Error creating request",
+			slog.String("method", method),
+			slog.String("error", err.Error()),
+		)
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
+	b.logger.Debug("Enviando request a Telegram API",
+		slog.String("method", method),
+	)
+
 	resp, err := b.client.Do(req)
 	if err != nil {
+		b.logger.Error("Error making request",
+			slog.String("method", method),
+			slog.String("error", err.Error()),
+		)
 		return nil, fmt.Errorf("error making request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
+		b.logger.Error("Error reading response",
+			slog.String("method", method),
+			slog.String("error", err.Error()),
+		)
 		return nil, fmt.Errorf("error reading response: %w", err)
 	}
 
 	var apiResp Response
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
+		b.logger.Error("Error unmarshaling response",
+			slog.String("method", method),
+			slog.String("error", err.Error()),
+		)
 		return nil, fmt.Errorf("error unmarshaling response: %w", err)
 	}
 
 	if !apiResp.Ok {
+		b.logger.Error("API error response",
+			slog.String("method", method),
+			slog.String("description", apiResp.Description),
+		)
 		return nil, fmt.Errorf("API error: %s", apiResp.Description)
 	}
 
@@ -118,12 +216,19 @@ func (b *Bot) GetMe(ctx context.Context) error {
 		return err
 	}
 
-	log.Printf("Bot iniciado: @%s (%s)", user.Username, user.FirstName)
+	b.logger.Info("Bot iniciado",
+		slog.String("username", user.Username),
+		slog.String("first_name", user.FirstName),
+	)
 	return nil
 }
 
 func (b *Bot) handleMessage(ctx context.Context, msg *Message) {
-	log.Printf("Mensaje de %s: %s", msg.From.FirstName, msg.Text)
+	b.logger.Info("Mensaje recibido",
+		slog.String("from", msg.From.FirstName),
+		slog.Int64("chat_id", msg.Chat.ID),
+		slog.String("text", msg.Text),
+	)
 
 	if strings.HasPrefix(msg.Text, "/") {
 		if b.commandRegistry != nil {
@@ -135,29 +240,28 @@ func (b *Bot) handleMessage(ctx context.Context, msg *Message) {
 	if msg.Text != "" {
 		response := fmt.Sprintf("Recibí tu mensaje: %s", msg.Text)
 		if err := b.SendMessage(ctx, msg.Chat.ID, response); err != nil {
-			log.Printf("Error enviando mensaje: %v", err)
+			b.logger.Error("Error enviando mensaje",
+				slog.Int64("chat_id", msg.Chat.ID),
+				slog.String("error", err.Error()),
+			)
 		}
 	}
 }
 
-func (b *Bot) SetCommandRegistry(commandRegistry *CommandRegistry) {
-	b.commandRegistry = commandRegistry
-}
-
 func (b *Bot) Start(ctx context.Context) error {
-	log.Println("Iniciando bot...")
+	b.logger.Info("Iniciando bot...")
 
 	// Verificar que el token funciona
 	if err := b.GetMe(ctx); err != nil {
 		return fmt.Errorf("error verificando bot: %w", err)
 	}
 
-	log.Println("Esperando mensajes... (Ctrl+C para detener)")
+	b.logger.Info("Esperando mensajes... (Ctrl+C para detener)")
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Shutdown señalizado, cerrando bot...")
+			b.logger.Info("Shutdown señalizado, cerrando bot...")
 			return ctx.Err()
 		default:
 			updates, err := b.getUpdates(ctx)
@@ -166,7 +270,9 @@ func (b *Bot) Start(ctx context.Context) error {
 					// El contexto fue cancelado, salir limpiamente
 					return ctx.Err()
 				}
-				log.Printf("Error obteniendo updates: %v", err)
+				b.logger.Error("Error obteniendo updates",
+					slog.String("error", err.Error()),
+				)
 				time.Sleep(3 * time.Second)
 				continue
 			}

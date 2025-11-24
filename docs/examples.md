@@ -78,7 +78,7 @@ func main() {
     b := bot.NewBot(token)
     commands := bot.NewCommandRegistry()
     commands.Register("start", commandStart)
-    b.SetCommandRegistry(commands)
+    b := bot.NewBot(token, bot.WithCommandRegistry(commands))
 
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
@@ -152,13 +152,12 @@ func main() {
         log.Fatal("TELEGRAM_BOT_TOKEN no está definido")
     }
 
-    b := bot.NewBot(token)
     commands := bot.NewCommandRegistry()
     commands.Register("start", commandStart)
     commands.Register("help", commandHelp)
     commands.Register("time", commandTime)
     commands.Register("echo", commandEcho)
-    b.SetCommandRegistry(commands)
+    b := bot.NewBot(token, bot.WithCommandRegistry(commands))
 
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
@@ -216,10 +215,9 @@ func main() {
         log.Fatal("TELEGRAM_BOT_TOKEN no está definido")
     }
 
-    b := bot.NewBot(token)
     commands := bot.NewCommandRegistry()
     commands.Register("slow", commandSlow)
-    b.SetCommandRegistry(commands)
+    b := bot.NewBot(token, bot.WithCommandRegistry(commands))
 
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
@@ -310,12 +308,11 @@ func main() {
         log.Fatal("TELEGRAM_BOT_TOKEN no está definido")
     }
 
-    b := bot.NewBot(token)
     commands := bot.NewCommandRegistry()
     commands.Register("inc", commandIncrement)
     commands.Register("get", commandGet)
     commands.Register("set", commandSet)
-    b.SetCommandRegistry(commands)
+    b := bot.NewBot(token, bot.WithCommandRegistry(commands))
 
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
@@ -377,10 +374,9 @@ func main() {
         log.Fatal("TELEGRAM_BOT_TOKEN no está definido")
     }
 
-    b := bot.NewBot(token)
     commands := bot.NewCommandRegistry()
     commands.Register("admin", commandAdmin)
-    b.SetCommandRegistry(commands)
+    b := bot.NewBot(token, bot.WithCommandRegistry(commands))
 
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
@@ -455,10 +451,9 @@ func main() {
         log.Fatal("TELEGRAM_BOT_TOKEN no está definido")
     }
 
-    b := bot.NewBot(token)
     commands := bot.NewCommandRegistry()
     commands.Register("reliable", commandReliable)
-    b.SetCommandRegistry(commands)
+    b := bot.NewBot(token, bot.WithCommandRegistry(commands))
 
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()

@@ -91,18 +91,48 @@ Obtiene información sobre el bot y la imprime en los logs.
 
 **Nota:** Este método se llama automáticamente en `Start()` para verificar el token.
 
-##### `SetCommandRegistry(commandRegistry *CommandRegistry)`
+##### `WithLogger(log *slog.Logger) BotOption`
 
-Establece el registro de comandos para el bot.
+Configura el logger que utilizará el bot. Permite que el consumidor reutilice su propia instancia de logger.
 
 **Parámetros:**
-- `commandRegistry` (*CommandRegistry): Registro de comandos a usar
+- `log` (*slog.Logger): Logger estructurado a usar
+
+**Retorna:**
+- `BotOption`: Función de opción para usar con `NewBot`
+
+**Ejemplo:**
+```go
+appLogger := slog.New(customHandler)
+bot := bot.NewBot(token, bot.WithLogger(appLogger))
+```
+
+##### `WithCommandRegistry(registry *CommandRegistry) BotOption`
+
+Configura el registro de comandos del bot.
+
+**Parámetros:**
+- `registry` (*CommandRegistry): Registro de comandos a usar
+
+**Retorna:**
+- `BotOption`: Función de opción para usar con `NewBot`
 
 **Ejemplo:**
 ```go
 commands := bot.NewCommandRegistry()
 commands.Register("start", commandStart)
-bot.SetCommandRegistry(commands)
+bot := bot.NewBot(token, bot.WithCommandRegistry(commands))
+```
+
+**Ejemplo combinando opciones:**
+```go
+appLogger := slog.New(customHandler)
+commands := bot.NewCommandRegistry()
+commands.Register("start", commandStart)
+bot := bot.NewBot(token,
+    bot.WithLogger(appLogger),
+    bot.WithCommandRegistry(commands),
+)
 ```
 
 ### Tipos de Datos

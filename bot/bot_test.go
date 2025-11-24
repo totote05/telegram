@@ -3,12 +3,25 @@ package bot
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/totote05/go-toolkit/pkg/logger"
 )
+
+// testLogger crea un logger de test que escribe a io.Discard
+func testLogger() *slog.Logger {
+	handler := logger.NewHandler(io.Discard, &logger.HandlerOptions{
+		Level:      slog.LevelError, // Solo errores en tests
+		StackTrace: 0,
+	})
+	return slog.New(handler)
+}
 
 func TestNewBot(t *testing.T) {
 	token := "test-token"
@@ -28,6 +41,10 @@ func TestNewBot(t *testing.T) {
 
 	if bot.client.Timeout != 70*time.Second {
 		t.Errorf("expected timeout 70s, got %v", bot.client.Timeout)
+	}
+
+	if bot.logger == nil {
+		t.Error("expected logger to be initialized")
 	}
 }
 
@@ -117,6 +134,7 @@ func TestBot_makeRequest(t *testing.T) {
 				token:     "test-token",
 				client:    &http.Client{Timeout: 5 * time.Second},
 				apiBaseURL: server.URL + "/bot%s/%s",
+				logger:    testLogger(),
 			}
 
 			ctx := context.Background()
@@ -156,11 +174,12 @@ func TestBot_makeRequest_ContextCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bot := &Bot{
-		token:     "test-token",
-		client:    &http.Client{Timeout: 5 * time.Second},
-		apiBaseURL: server.URL + "/bot%s/%s",
-	}
+		bot := &Bot{
+			token:     "test-token",
+			client:    &http.Client{Timeout: 5 * time.Second},
+			apiBaseURL: server.URL + "/bot%s/%s",
+			logger:    testLogger(),
+		}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -215,6 +234,7 @@ func TestBot_getUpdates(t *testing.T) {
 				client:    &http.Client{Timeout: 5 * time.Second},
 				offset:    tt.offset,
 				apiBaseURL: server.URL + "/bot%s/%s",
+				logger:    testLogger(),
 			}
 
 			ctx := context.Background()
@@ -259,11 +279,12 @@ func TestBot_SendMessage(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bot := &Bot{
-		token:     "test-token",
-		client:    &http.Client{Timeout: 5 * time.Second},
-		apiBaseURL: server.URL + "/bot%s/%s",
-	}
+		bot := &Bot{
+			token:     "test-token",
+			client:    &http.Client{Timeout: 5 * time.Second},
+			apiBaseURL: server.URL + "/bot%s/%s",
+			logger:    testLogger(),
+		}
 
 	ctx := context.Background()
 	err := bot.SendMessage(ctx, 123, "Hello")
@@ -279,11 +300,12 @@ func TestBot_SendMessage_Error(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bot := &Bot{
-		token:     "test-token",
-		client:    &http.Client{Timeout: 5 * time.Second},
-		apiBaseURL: server.URL + "/bot%s/%s",
-	}
+		bot := &Bot{
+			token:     "test-token",
+			client:    &http.Client{Timeout: 5 * time.Second},
+			apiBaseURL: server.URL + "/bot%s/%s",
+			logger:    testLogger(),
+		}
 
 	ctx := context.Background()
 	err := bot.SendMessage(ctx, 123, "Hello")
@@ -329,6 +351,7 @@ func TestBot_GetMe(t *testing.T) {
 				token:     "test-token",
 				client:    &http.Client{Timeout: 5 * time.Second},
 				apiBaseURL: server.URL + "/bot%s/%s",
+				logger:    testLogger(),
 			}
 
 			ctx := context.Background()
@@ -408,19 +431,19 @@ func TestBot_handleMessage(t *testing.T) {
 			}))
 			defer server.Close()
 
-			bot := &Bot{
-				token:     "test-token",
-				client:    &http.Client{Timeout: 5 * time.Second},
-				apiBaseURL: server.URL + "/bot%s/%s",
-			}
-
+			var opts []BotOption
 			if tt.hasRegistry {
 				registry := NewCommandRegistry()
 				if tt.commandHandler != nil {
 					registry.Register("start", tt.commandHandler)
 				}
-				bot.SetCommandRegistry(registry)
+				opts = append(opts, WithCommandRegistry(registry))
 			}
+
+			bot := NewBot("test-token", opts...)
+			bot.apiBaseURL = server.URL + "/bot%s/%s"
+			bot.client = &http.Client{Timeout: 5 * time.Second}
+			bot.logger = testLogger()
 
 			ctx := context.Background()
 			bot.handleMessage(ctx, tt.msg)
@@ -449,6 +472,7 @@ func TestBot_handleMessage_NilRegistry(t *testing.T) {
 		token:     "test-token",
 		client:    &http.Client{Timeout: 5 * time.Second},
 		apiBaseURL: "https://api.telegram.org/bot%s/%s",
+		logger:    testLogger(),
 		// commandRegistry is nil
 	}
 
@@ -457,11 +481,9 @@ func TestBot_handleMessage_NilRegistry(t *testing.T) {
 	bot.handleMessage(ctx, msg)
 }
 
-func TestBot_SetCommandRegistry(t *testing.T) {
-	bot := NewBot("test-token")
+func TestBot_WithCommandRegistry(t *testing.T) {
 	registry := NewCommandRegistry()
-
-	bot.SetCommandRegistry(registry)
+	bot := NewBot("test-token", WithCommandRegistry(registry))
 
 	if bot.commandRegistry != registry {
 		t.Error("expected command registry to be set")
@@ -475,11 +497,12 @@ func TestBot_Start_ContextCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bot := &Bot{
-		token:     "test-token",
-		client:    &http.Client{Timeout: 5 * time.Second},
-		apiBaseURL: server.URL + "/bot%s/%s",
-	}
+		bot := &Bot{
+			token:     "test-token",
+			client:    &http.Client{Timeout: 5 * time.Second},
+			apiBaseURL: server.URL + "/bot%s/%s",
+			logger:    testLogger(),
+		}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
@@ -501,11 +524,12 @@ func TestBot_Start_GetMeError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bot := &Bot{
-		token:     "test-token",
-		client:    &http.Client{Timeout: 5 * time.Second},
-		apiBaseURL: server.URL + "/bot%s/%s",
-	}
+		bot := &Bot{
+			token:     "test-token",
+			client:    &http.Client{Timeout: 5 * time.Second},
+			apiBaseURL: server.URL + "/bot%s/%s",
+			logger:    testLogger(),
+		}
 
 	ctx := context.Background()
 	err := bot.Start(ctx)

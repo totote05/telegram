@@ -80,8 +80,7 @@ Definiciones de estructuras que representan entidades de la API de Telegram.
 
 ```
 main() 
-  → NewBot(token)
-  → SetCommandRegistry(registry) [opcional]
+  → NewBot(token, WithCommandRegistry(registry)) [opcional]
   → Start(ctx)
     → GetMe() [verificación]
     → Loop:

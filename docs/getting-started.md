@@ -119,13 +119,13 @@ func main() {
         log.Fatal("TELEGRAM_BOT_TOKEN no está definido")
     }
 
-    b := bot.NewBot(token)
-
     // Crear y configurar el registro de comandos
     commands := bot.NewCommandRegistry()
     commands.Register("start", commandStart)
     commands.Register("help", commandHelp)
-    b.SetCommandRegistry(commands)
+    
+    // Crear el bot con el registro de comandos
+    b := bot.NewBot(token, bot.WithCommandRegistry(commands))
 
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
